@@ -2,21 +2,10 @@ schemaVersion: "2.0.0"
 metadata:
   name: "spring-petclinic-demo"
 projects:
-  - name: "spring-petclinic"
+  - name: web-nodejs-sample
     git:
       remotes:
-        origin: "https://github.com/sparkoo/spring-petclinic"
-events:
-  preStart:
-    - inject-theia-in-remote-sidecar
-    - copy-vsx
-commands:
-  - apply:
-      component: remote-runtime-injector
-    id: inject-theia-in-remote-sidecar
-  - apply:
-      component: vsx-installer
-    id: copy-vsx
+        origin: "https://github.com/che-samples/web-nodejs-sample.git"
 components:
   - name: theia-ide
     attributes:
@@ -154,3 +143,122 @@ components:
           attributes:
             type: terminal
             cookiesAuthEnabled: "true"
+  - name: vscode-typescript
+    attributes:
+      "app.kubernetes.io/part-of": che-theia.eclipse.org
+      "app.kubernetes.io/component": vscode-plugin
+
+      # Added by Che-theia at start when detecting, after cloning, that the extensions.json in the repo
+      # contains the typescript vscode plugin.
+      "che-theia.eclipse.org/vscode-extensions":
+        - https://download.jboss.org/jbosstools/vscode/3rdparty/ms-code.typescript/che-typescript-language-1.35.1.vsix
+
+    container:
+      image: "quay.io/eclipse/che-sidecar-node:10-0cb5d78"
+      memoryLimit: '512Mi'
+      env:
+        - name: PLUGIN_REMOTE_ENDPOINT_EXECUTABLE
+          value: /remote-endpoint/plugin-remote-endpoint
+        - name: THEIA_PLUGINS
+          value: local-dir:///plugins/sidecars/vscode-typescript
+      volumeMounts:
+        - path: "/remote-endpoint"
+          name: remote-endpoint
+        - name: plugins
+          path: /plugins
+
+  # plugin:
+  #   name: node-debug-plugin
+  #   id: ms-vscode/node-debug2/latest
+
+  - name: vscode-node-debug
+    attributes:
+      "app.kubernetes.io/part-of": che-theia.eclipse.org
+      "app.kubernetes.io/component": vscode-plugin
+
+      # Added by Che-theia at start when detecting, after cloning, that the extensions.json in the repo
+      # contains the typescript vscode plugin.
+      "che-theia.eclipse.org/vscode-extensions":
+        - https://download.jboss.org/jbosstools/vscode/3rdparty/vscode-node-debug/node-debug-1.41.1.vsix
+        - https://download.jboss.org/jbosstools/vscode/3rdparty/vscode-node-debug2/node-debug2-1.42.3.vsix
+
+    container:
+      image: "quay.io/eclipse/che-sidecar-node:12-026416c"
+      memoryLimit: '512Mi'
+      env:
+        - name: PLUGIN_REMOTE_ENDPOINT_EXECUTABLE
+          value: /remote-endpoint/plugin-remote-endpoint
+        - name: THEIA_PLUGINS
+          value: local-dir:///plugins/sidecars/vscode-node-debug
+      volumeMounts:
+        - path: "/remote-endpoint"
+          name: remote-endpoint
+        - path: "/plugins"
+          name: plugins
+
+  # User runtime container
+  - name: nodejs
+    container:
+      image: quay.io/eclipse/che-nodejs10-ubi:nightly
+      memoryLimit: 512Mi
+      endpoints:
+        - name: nodejs
+          protocol: http
+          targetPort: 3000
+      mountSources: true
+
+commands:
+
+  # Commands coming from plugin editor
+  - id: inject-theia-in-remote-sidecar
+    apply:
+      component: remote-runtime-injector
+  - id: copy-vsx
+    apply:
+      component: vsx-installer
+
+  # User commands
+  - id: download-dependencies
+    exec:
+      component: nodejs
+      commandLine: npm install
+      workingDir: ${PROJECTS_ROOT}/project/app
+  - id: run-the-app
+    exec:
+      component: nodejs
+      commandLine: nodemon app.js
+      workingDir: ${PROJECTS_ROOT}/project/app
+  - id: run-the-app-(debugging-enabled)
+    exec:
+      component: nodejs
+      commandLine: nodemon --inspect app.js
+      workingDir: ${PROJECTS_ROOT}/project/app
+  - id: stop-the-app
+    exec:
+      component: nodejs
+      commandLine: >-
+          node_server_pids=$(pgrep -fx '.*nodemon (--inspect )?app.js' | tr "\\n" " ") &&
+          echo "Stopping node server with PIDs: ${node_server_pids}" &&
+          kill -15 ${node_server_pids} &>/dev/null && echo 'Done.'
+  - id: attach-remote-debugger
+    vscodeLaunch:
+      inlined: |
+        {
+          "version": "0.2.0",
+          "configurations": [
+            {
+              "type": "node",
+              "request": "attach",
+              "name": "Attach to Remote",
+              "address": "localhost",
+              "port": 9229,
+              "localRoot": "${workspaceFolder}",
+              "remoteRoot": "${workspaceFolder}"
+            }
+          ]
+        }
+
+events:
+  preStart:
+    - inject-theia-in-remote-sidecar
+    - copy-vsx
