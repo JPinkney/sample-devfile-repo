@@ -216,4 +216,4 @@ components:
         - name: nodejs
           protocol: http
           targetPort: 3000
-      mountSources: truem
+      mountSources: true
