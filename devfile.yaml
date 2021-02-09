@@ -1,4 +1,5 @@
 kind: DevWorkspace
+schemaVersion: 2.0.0
 apiVersion: workspace.devfile.io/v1alpha2
 metadata:
   name: theia-nodejs
