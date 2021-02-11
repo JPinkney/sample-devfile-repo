@@ -234,4 +234,4 @@ events:
   preStart:
     - inject-theia-in-remote-sidecar
     - copy-vsx
-k
+
